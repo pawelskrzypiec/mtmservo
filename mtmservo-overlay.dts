@@ -1,0 +1,21 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2835";
+
+    fragment@0 {
+        target-path = "/";
+
+        __overlay__ {
+            mtmservo {
+                compatible = "mtmservo";
+                ems-gpios = <&gpio 26 0>,   /* electromagnet 0, active high */
+                            <&gpio 19 0>,   /* electromagnet 1, active high */
+                            <&gpio 13 0>,   /* electromagnet 2, active high */
+                            <&gpio 6 0>;    /* electromagnet 3, active high */
+                det-gpio = <&gpio 5 0x11>;  /* detector, active low, pull up */
+            };
+        };
+    };
+};

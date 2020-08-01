@@ -1,0 +1,6 @@
+*.ko*
+*.mod*
+*.o*
+*.symvers
+*.dtbo
+.vscode/

@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0
+/**
+ * mtmservo stepper motor driver
+ *
+ * Copyright 2020 Pawel Skrzypiec <pawel.skrzypiec@agh.edu.pl>
+ */
+
 #include <linux/delay.h>
 #include <linux/kernel.h>
 #include <linux/module.h>

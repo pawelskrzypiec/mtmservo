@@ -44,7 +44,6 @@ static void mtmservo_stepping_work(struct work_struct *work)
             ++mtmservo->pos;
         else
             --mtmservo->pos;
-
         mtmservo_set_active_electromagnet(mtmservo, mtmservo->pos % mtmservo->ems->ndescs);
         msleep(period);
     }
@@ -82,8 +81,8 @@ static ssize_t mtmservo_freq_store(struct device *dev, struct device_attribute *
 
     err = kstrtoint(buf, 0, &val);
     if (err)
-        dev_err(dev, "failed to set freq\n");
-    else if (val == 0 || val > 1000)
+        dev_err(dev, "incorrect frequency value: %s\n", buf);
+    else if (val <= 0 || val > 1000)
         dev_err(dev, "freq should be in range 1-1000\n");
     else
         atomic_set(&mtmservo->freq, val);
@@ -116,7 +115,10 @@ static ssize_t mtmservo_dst_pos_store(struct device *dev, struct device_attribut
 
     err = kstrtoint(buf, 0, &val);
     if (err) {
-        dev_err(dev, "failed to set pos\n");
+        dev_err(dev, "failed to set pos: %s\n", buf);
+    }
+    else if (val < 0) {
+        dev_err(dev, "dst_position should be >= 0\n");
     }
     else {
         if (mtmservo->pos != val) {
@@ -141,17 +143,10 @@ static ssize_t mtmservo_cal_store(struct device *dev, struct device_attribute *a
     const char *buf, size_t size)
 {
     struct mtmservo *mtmservo = (struct mtmservo *)dev->driver_data;
-    int err, val;
 
-    err = kstrtoint(buf, 0, &val);
-    if (err) {
-        dev_err(dev, "failed to set pos\n");
-    }
-    else {
-        atomic_set(&mtmservo->calibration, 1);
-        INIT_WORK(&mtmservo->work, mtmservo_calibration_work);
-        queue_work(mtmservo->workqueue, &mtmservo->work);
-    }
+    atomic_set(&mtmservo->calibration, 1);
+    INIT_WORK(&mtmservo->work, mtmservo_calibration_work);
+    queue_work(mtmservo->workqueue, &mtmservo->work);
     return size;
 }
 
@@ -183,26 +178,25 @@ static int mtmservo_probe(struct platform_device *dev)
     mtmservo->dev = dev;
     platform_set_drvdata(dev, mtmservo);
 
-    mtmservo->ems = gpiod_get_array(&dev->dev, "ems", GPIOD_OUT_LOW);
+    mtmservo->ems = devm_gpiod_get_array(&dev->dev, "ems", GPIOD_OUT_LOW);
     if (IS_ERR(mtmservo->ems)) {
         dev_err(&dev->dev, "failed to allocate ems\n");
         err = PTR_ERR(mtmservo->ems);
         goto out_ret_err;
     }
 
-    mtmservo->det = gpiod_get(&dev->dev, "det", GPIOD_IN);
+    mtmservo->det = devm_gpiod_get(&dev->dev, "det", GPIOD_IN);
     if (IS_ERR(mtmservo->det)) {
         dev_err(&dev->dev, "failed to allocate det\n");
         err = PTR_ERR(mtmservo->det);
-        goto out_put_ems;
+        goto out_ret_err;
     }
 
     mtmservo->workqueue = create_singlethread_workqueue("mtmservo_workqueue");
-
     if (!mtmservo->workqueue) {
         dev_err(&dev->dev, "failed to allocate workqueue\n");
         err = -ENOMEM;
-        goto out_put_det;
+        goto out_ret_err;
     }
 
     err = device_create_file(&dev->dev, &dev_attr_frequency);
@@ -254,10 +248,6 @@ out_remove_freq_attr_file:
 out_destroy_workqueue:
     flush_workqueue(mtmservo->workqueue);
     destroy_workqueue(mtmservo->workqueue);
-out_put_det:
-    gpiod_put(mtmservo->det);
-out_put_ems:
-    gpiod_put_array(mtmservo->ems);
 out_ret_err:
     return err;
 }
@@ -273,8 +263,6 @@ static int mtmservo_remove(struct platform_device *dev)
     device_remove_file(&dev->dev, &dev_attr_frequency);
     flush_workqueue(mtmservo->workqueue);
     destroy_workqueue(mtmservo->workqueue);
-    gpiod_put(mtmservo->det);
-    gpiod_put_array(mtmservo->ems);
 
     dev_info(&dev->dev, "removed\n");
     return 0;
